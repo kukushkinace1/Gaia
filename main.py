@@ -99,31 +99,22 @@ while True:
 
     if "error" in gpt_response:
         logging.error(f"GPT Request Error")
-        gpt_answer = "Error occurred. Please retry."
-        error = True
+        gpt_answer = f"Let's go tell about {random_country}!"
     else:
         gpt_answer = client.extract_answer(gpt_response).replace('\n', ' ')
         print(gpt_answer)
-        error = False
 
     custom_response = client.send_custom_request(gpt_answer + ' Tell me a random theme to speak')
 
     print(f'\n{GREEN}' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + f" [Ответ GaiaNet]:{RESET}")
-    
+
     if "error" in custom_response:
         logging.error(f"GaiaNet Request Error")
-        custom_answer = "Error occurred. Please retry."
-        error1 = True
+        custom_answer = f"Let's go tell about {random_country}!"
     else:
         custom_answer = client.extract_answer(custom_response).replace('\n', ' ')
         print(custom_answer)
-        error1 = False
 
-    if error or error1:
-        random_country = random.choice(country)
-        initial_question = f"Let's go tell about {random_country}!"
-        gpt_response = client.send_gpt_request(initial_question)
-    else:
-        gpt_response = client.send_gpt_request(custom_answer)
+    gpt_response = client.send_gpt_request(custom_answer)
 
     time.sleep(random.randint(60, 180))
