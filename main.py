@@ -1,120 +1,57 @@
 import requests
-import json
-import time
-import logging
 import random
+import logging
+import time
+from faker import Faker
+from datetime import datetime
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
+node_url = "https://ВАШ_ID.gaia.domains/v1/chat/completions"
 
-gaianetLink = 'https://ВАШ_ID.gaia.domains/v1/chat/completions'
-#пример gaianetLink = 'https://0xbd6e286ff50fc350e3e56f8f70db946ae2b7cf.gaia.domains/v1/chat/completions'
+faker = Faker()
 
-GREEN = "\033[32m"
-RESET = "\033[0m"
-
-class DualAPIClient:
-    def __init__(self, gpt_config, custom_config):
-        self.gpt_config = gpt_config
-        self.custom_config = custom_config
-        self.previous_question = None  # Переменная для хранения предыдущего вопроса
-
-    def _send_request(self, config):
-        try:
-            response = requests.post(config['url'], headers=config['headers'], data=json.dumps(config['data']))
-            if response.status_code == 200:
-                return response.json()
-            else:
-                # Возвращаем код ошибки и текст ответа сервера
-                return {
-                    "error": response.status_code,
-                    "message": response.text
-                }
-        except requests.exceptions.RequestException as e:
-            # Ловим исключения сети, например, таймауты
-            return {
-                "error": "network_error",
-                "message": str(e)
-            }
-
-    def send_gpt_request(self, user_message):
-        if self.previous_question:
-            usr_message = f"{user_message} + 'your answer: {self.previous_question}'"
-        else:
-            usr_message = user_message
-
-        self.gpt_config['data']['messages'][1]['content'] = usr_message
-        response = self._send_request(self.gpt_config)
-
-        if "error" not in response:
-            self.previous_question = self.extract_answer(response)
-
-        return response
-
-    def send_custom_request(self, user_message):
-        self.custom_config['data']['messages'][1]['content'] = user_message
-        return self._send_request(self.custom_config)
-
-    def extract_answer(self, response):
-        if "error" in response:
-            return f"Error: {response['error']} - {response['message']}"
-        return response.get('choices', [{}])[0].get('message', {}).get('content', '')
-
-
-gpt_config = {
-    'url': gaianetLink,
-    'headers': {
-        'accept': 'application/json',
-        'Content-Type': 'application/json'
-    },
-    'data': {
-        "messages": [
-            {"role": "system", "content": 'You answer with 1 short phrase'},
-            {"role": "user", "content": ""}
-        ]
-    }
+headers = {
+    "accept": "application/json",
+    "Content-Type": "application/json"
 }
 
-gaianet_config = {
-    'url': gaianetLink,
-    'headers': {
-        'accept': 'application/json',
-        'Content-Type': 'application/json'
-    },
-    'data': {
-        "messages": [
-            {"role": "system", "content": "You answer with 1 short phrase"},
-            {"role": "user", "content": ""}
-        ]
-    }
-}
+logging.basicConfig(filename='chat_log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
 
-client = DualAPIClient(gpt_config, gaianet_config)
-country = ["Russia", "Canada", "United States", "China", "Brazil", "Australia", "India", "Argentina", "Kazakhstan", "Algeria", "Democratic Republic of the Congo", "Greenland", "Saudi Arabia", "Mexico", "Indonesia", "Sudan", "Libya", "Iran", "Mongolia", "Peru"]
-random_country = random.choice(country)
-initial_question = f"Let's go tell about {random_country}!"
-gpt_response = client.send_gpt_request(initial_question)
+def log_message(node, message):
+    logging.info(f"{node}: {message}")
+
+def send_message(node_url, message):
+    try:
+        response = requests.post(node_url, json=message, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to get response from API: {e}")
+        return None
+
+def extract_reply(response):
+    if response and 'choices' in response:
+        return response['choices'][0]['message']['content']
+    return ""
 
 while True:
-    print(f'\n{GREEN}' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + f" [Вопрос от GPT]:{RESET}")
+    random_question = faker.sentence(nb_words=10)
+    message = {
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": random_question}
+        ]
+    }
 
-    if "error" in gpt_response:
-        logging.error(f"GPT Request Error")
-        gpt_answer = f"Let's go tell about {random_country}!"
-    else:
-        gpt_answer = client.extract_answer(gpt_response).replace('\n', ' ')
-        print(gpt_answer)
+    question_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    custom_response = client.send_custom_request(gpt_answer + ' Tell me a random theme to speak')
+    response = send_message(node_url, message)
+    reply = extract_reply(response)
 
-    print(f'\n{GREEN}' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + f" [Ответ GaiaNet]:{RESET}")
+    reply_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if "error" in custom_response:
-        logging.error(f"GaiaNet Request Error")
-        custom_answer = f"Let's go tell about {random_country}!"
-    else:
-        custom_answer = client.extract_answer(custom_response).replace('\n', ' ')
-        print(custom_answer)
+    log_message("Node replied", f"Q ({question_time}): {random_question} A ({reply_time}): {reply}")
 
-    gpt_response = client.send_gpt_request(custom_answer)
+    print(f"Q ({question_time}): {random_question}\nA ({reply_time}): {reply}")
 
-    time.sleep(random.randint(60, 180))
+    delay = random.randint(60, 120)
+    time.sleep(delay)
